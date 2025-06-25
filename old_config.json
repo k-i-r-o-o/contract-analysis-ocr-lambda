@@ -1,0 +1,38 @@
+{
+    "FunctionName": "ProcessUploadedFile",
+    "FunctionArn": "arn:aws:lambda:us-east-1:588738605986:function:ProcessUploadedFile",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::588738605986:role/LambdaS3TriggerRole",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 402,
+    "Description": "",
+    "Timeout": 3,
+    "MemorySize": 128,
+    "LastModified": "2025-06-23T16:38:56.000+0000",
+    "CodeSha256": "3Q4nrqsE4aPciJ3ijCYNBPQmneaAj8b6bTrhDb0g8jU=",
+    "Version": "$LATEST",
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "354bd104-c115-4699-9a3a-90038a52183b",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:us-east-1::runtime:b5ce413242a9b8ef00a46980d4de4b943c0679481f66d34d1a1dd06ad4e16fe8"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/ProcessUploadedFile"
+    }
+}

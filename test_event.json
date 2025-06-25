@@ -3,7 +3,7 @@
     {
       "s3": {
         "bucket": { "name": "contract-upload-bucket-mvp" },
-        "object": { "key": "aws-overview.pdf" }
+        "object": { "key": "rain.pdf" }
       }
     }
   ]
