@@ -1,11 +1,38 @@
 from sentence_transformers import SentenceTransformer
 import logging
+import os
 
-# Load the embedding model once per container lifetime
-_model = SentenceTransformer('all-MiniLM-L6-v2')  # A lightweight embedding model
-
+# Setup logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Define model path (use /tmp for Lambda environment)
+MODEL_PATH = os.getenv('MODEL_PATH', '/tmp/all-MiniLM-L6-v2')
+
+# Print out the model path to ensure it's correct
+logger.info(f"Trying to load model from: {MODEL_PATH}")
+
+# Check if model is already available in the /tmp directory
+if not os.path.exists(MODEL_PATH):
+    logger.info(f"Model not found at {MODEL_PATH}, downloading and saving it.")
+    
+    try:
+        # Load the model from Hugging Face and save it to /tmp directory
+        model = SentenceTransformer('all-MiniLM-L6-v2')
+        model.save(MODEL_PATH)  # Save model to /tmp directory
+        logger.info(f"Model downloaded and saved to {MODEL_PATH}")
+    except Exception as e:
+        logger.exception(f"Failed to download and save model to {MODEL_PATH}: {str(e)}")
+        raise
+
+# Now load the model from the local path
+try:
+    logger.info(f"Loading embedding model from: {MODEL_PATH}")
+    _model = SentenceTransformer(MODEL_PATH)
+    logger.info("Model loaded successfully.")
+except Exception as e:
+    logger.exception(f"Failed to load model from {MODEL_PATH}: {str(e)}")
+    raise
 
 def embed_text_chunks(full_text: str):
     """
@@ -13,15 +40,10 @@ def embed_text_chunks(full_text: str):
     This function assumes that the text is already split into chunks.
     It returns a list of embeddings corresponding to each chunk.
     """
-    # Split the full text into chunks (here assuming we break by paragraphs or sentences)
-    # You can adjust chunking based on the text length, for instance, breaking into chunks of max length
     chunks = split_text_into_chunks(full_text)
     logger.info(f"Split text into {len(chunks)} chunks.")
-
-    # Get embeddings for the chunks
     embeddings = embed_lines(chunks)
-
-    return list(zip(chunks, embeddings))  # Return chunks with corresponding embeddings
+    return list(zip(chunks, embeddings))
 
 def embed_lines(lines):
     """
@@ -33,19 +55,18 @@ def embed_lines(lines):
 def split_text_into_chunks(text, chunk_size=500):
     """
     Splits the extracted full text into smaller chunks based on a defined chunk_size.
-    This function can be adjusted based on the use case (e.g., sentence-based, word-based, etc.)
     """
     chunks = []
     current_chunk = []
 
-    for line in text.split("\n"):  # Split by newline to treat each line as a chunk
+    for line in text.split("\n"):
         if len(" ".join(current_chunk + [line])) <= chunk_size:
             current_chunk.append(line)
         else:
             chunks.append(" ".join(current_chunk))
-            current_chunk = [line]  # Start a new chunk
+            current_chunk = [line]
 
     if current_chunk:
-        chunks.append(" ".join(current_chunk))  # Add the last chunk
+        chunks.append(" ".join(current_chunk))
 
     return chunks
