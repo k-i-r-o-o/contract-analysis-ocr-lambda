@@ -1,72 +1,77 @@
 from sentence_transformers import SentenceTransformer
 import logging
 import os
+from pathlib import Path
 
 # Setup logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Define model path (use /tmp for Lambda environment)
-MODEL_PATH = os.getenv('MODEL_PATH', '/tmp/all-MiniLM-L6-v2')
+# Lambda-specific configuration
+MODEL_NAME = 'all-MiniLM-L6-v2'
+MODEL_CACHE_DIR = '/tmp/sentence_transformers'
 
-# Print out the model path to ensure it's correct
-logger.info(f"Trying to load model from: {MODEL_PATH}")
-
-# Check if model is already available in the /tmp directory
-if not os.path.exists(MODEL_PATH):
-    logger.info(f"Model not found at {MODEL_PATH}, downloading and saving it.")
-    
+def initialize_model():
+    """Initialize model with Lambda-optimized caching"""
     try:
-        # Load the model from Hugging Face and save it to /tmp directory
-        model = SentenceTransformer('all-MiniLM-L6-v2')
-        model.save(MODEL_PATH)  # Save model to /tmp directory
-        logger.info(f"Model downloaded and saved to {MODEL_PATH}")
+        # Configure cache directory
+        os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
+        os.environ['SENTENCE_TRANSFORMERS_HOME'] = MODEL_CACHE_DIR
+        
+        logger.info(f"Loading model {MODEL_NAME}...")
+        return SentenceTransformer(MODEL_NAME)
     except Exception as e:
-        logger.exception(f"Failed to download and save model to {MODEL_PATH}: {str(e)}")
+        logger.exception(f"Model initialization failed: {str(e)}")
         raise
 
-# Now load the model from the local path
-try:
-    logger.info(f"Loading embedding model from: {MODEL_PATH}")
-    _model = SentenceTransformer(MODEL_PATH)
-    logger.info("Model loaded successfully.")
-except Exception as e:
-    logger.exception(f"Failed to load model from {MODEL_PATH}: {str(e)}")
-    raise
+# Global model instance (persists across warm starts)
+model = initialize_model()
 
 def embed_text_chunks(full_text: str):
     """
     Break the text into chunks, then embed the chunks.
-    This function assumes that the text is already split into chunks.
-    It returns a list of embeddings corresponding to each chunk.
+    Returns list of (chunk, embedding) tuples.
     """
-    chunks = split_text_into_chunks(full_text)
-    logger.info(f"Split text into {len(chunks)} chunks.")
-    embeddings = embed_lines(chunks)
-    return list(zip(chunks, embeddings))
+    try:
+        chunks = split_text_into_chunks(full_text)
+        logger.info(f"Split text into {len(chunks)} chunks.")
+        
+        # Generate embeddings with Lambda-optimized settings
+        embeddings = model.encode(
+            chunks,
+            batch_size=4,  # Conservative for Lambda memory
+            show_progress_bar=False,  # Disabled for Lambda
+            convert_to_numpy=True,
+            normalize_embeddings=True
+        )
+        
+        return list(zip(chunks, embeddings.tolist()))  # Convert to list for JSON serialization
+        
+    except Exception as e:
+        logger.exception(f"Embedding failed: {str(e)}")
+        raise
 
-def embed_lines(lines):
+def split_text_into_chunks(text: str, chunk_size: int = 500):
     """
-    Converts a list of lines into embeddings (list of vectors).
-    """
-    logger.info(f"Generating embeddings for {len(lines)} lines...")
-    return _model.encode(lines, show_progress_bar=True).tolist()
-
-def split_text_into_chunks(text, chunk_size=500):
-    """
-    Splits the extracted full text into smaller chunks based on a defined chunk_size.
+    Splits text into chunks of approximately chunk_size characters.
+    More memory-efficient implementation.
     """
     chunks = []
     current_chunk = []
-
+    current_length = 0
+    
     for line in text.split("\n"):
-        if len(" ".join(current_chunk + [line])) <= chunk_size:
+        line_length = len(line)
+        if current_length + line_length <= chunk_size:
             current_chunk.append(line)
+            current_length += line_length
         else:
-            chunks.append(" ".join(current_chunk))
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
             current_chunk = [line]
-
+            current_length = line_length
+    
     if current_chunk:
         chunks.append(" ".join(current_chunk))
-
+    
     return chunks
