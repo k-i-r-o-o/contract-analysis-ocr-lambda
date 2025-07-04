@@ -1,30 +1,25 @@
 from sentence_transformers import SentenceTransformer
 import logging
 import os
-from pathlib import Path
 
 # Setup logger
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Lambda-specific configuration
-MODEL_NAME = 'all-MiniLM-L6-v2'
-MODEL_CACHE_DIR = '/tmp/sentence_transformers'
+# Update this if you use a different folder name for your model
+LOCAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "all-MiniLM-L6-v2")
 
 def initialize_model():
-    """Initialize model with Lambda-optimized caching"""
+    """Load model from local path inside the Lambda package."""
     try:
-        # Configure cache directory
-        os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
-        os.environ['SENTENCE_TRANSFORMERS_HOME'] = MODEL_CACHE_DIR
-        
-        logger.info(f"Loading model {MODEL_NAME}...")
-        return SentenceTransformer(MODEL_NAME)
+        logger.info(f"Loading model from {LOCAL_MODEL_PATH}")
+        model = SentenceTransformer(LOCAL_MODEL_PATH)
+        return model
     except Exception as e:
         logger.exception(f"Model initialization failed: {str(e)}")
         raise
 
-# Global model instance (persists across warm starts)
+# Load the model only once
 model = initialize_model()
 
 def embed_text_chunks(full_text: str):
@@ -35,31 +30,29 @@ def embed_text_chunks(full_text: str):
     try:
         chunks = split_text_into_chunks(full_text)
         logger.info(f"Split text into {len(chunks)} chunks.")
-        
-        # Generate embeddings with Lambda-optimized settings
+
         embeddings = model.encode(
             chunks,
-            batch_size=4,  # Conservative for Lambda memory
-            show_progress_bar=False,  # Disabled for Lambda
+            batch_size=4,
+            show_progress_bar=False,
             convert_to_numpy=True,
             normalize_embeddings=True
         )
-        
-        return list(zip(chunks, embeddings.tolist()))  # Convert to list for JSON serialization
-        
+
+        return list(zip(chunks, embeddings.tolist()))
+
     except Exception as e:
         logger.exception(f"Embedding failed: {str(e)}")
         raise
 
 def split_text_into_chunks(text: str, chunk_size: int = 500):
     """
-    Splits text into chunks of approximately chunk_size characters.
-    More memory-efficient implementation.
+    Splits text into chunks of approximately `chunk_size` characters.
     """
     chunks = []
     current_chunk = []
     current_length = 0
-    
+
     for line in text.split("\n"):
         line_length = len(line)
         if current_length + line_length <= chunk_size:
@@ -70,8 +63,8 @@ def split_text_into_chunks(text: str, chunk_size: int = 500):
                 chunks.append(" ".join(current_chunk))
             current_chunk = [line]
             current_length = line_length
-    
+
     if current_chunk:
         chunks.append(" ".join(current_chunk))
-    
+
     return chunks
